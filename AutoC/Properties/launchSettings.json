@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "AutoC": {
+      "commandName": "Project"
+    },
+    "TShockPluginDebug": {
+      "commandName": "Executable",
+      "executablePath": "D:\\NewTShock\\TShock.Server.exe",
+      "commandLineArgs": "-world c:\\Users\\777\\Documents\\My Games\\Terraria\\Worlds\\Dev.wld -port 7777",
+      "workingDirectory": "D:\\NewTShock"
+    }
+  }
+}
