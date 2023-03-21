@@ -9,10 +9,11 @@ namespace AutoClear
 {
     public class Config
     {
-        public bool Debug = true;
-        public int Interval = 600000;
-        public bool AutoClear = true;
-        public string ItemIndMessage = "[i:4460] ";
+        public bool AutoClearEnableProjectiles = true;
+        public bool AutoClearEnabled = true;
+        public bool AutoClearMessage = true;
+        public int AutoClearInterval = 600000;
+        public int AutoClearRadius = 40000;
         public void Write(string path)
         {
             File.WriteAllText(path, JsonConvert.SerializeObject(this, Formatting.Indented));
