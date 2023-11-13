@@ -1,28 +1,28 @@
-﻿using TShockAPI;
+﻿using System.Timers;
 using Terraria;
 using TerrariaApi.Server;
+using TShockAPI;
 using TShockAPI.Hooks;
-using System.Timers;
 
 namespace AutoClear
 {
     [ApiVersion(2,1)]
     public class AutoClear : TerrariaPlugin
     {
-        public override string Author => "Raiden (theraintransformend)"; //terraria.by
+        public override string Author => "Raiden"; //terraria.by
         public override string Name => "AutoClear";
         public override Version Version => new Version(1, 2);
         public AutoClear(Main main) : base(main) { }
 
-        public static System.Timers.Timer Timer_ = new System.Timers.Timer(1000);
-        public static string ConfigPath { get { return Path.Combine(TShock.SavePath, "AutoClear.json"); } }
-        public static Config config;
+        public System.Timers.Timer timer = new System.Timers.Timer(1000);
+        public string SavePath => Path.Combine(TShock.SavePath, "AutoClear.json");
+        public Config config;
 
         #region Initialize & Disposing
         public override void Initialize()
         {
+            config = Config.Read(SavePath);
             ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInitialize);
-            ServerApi.Hooks.GameInitialize.Register(this, OnInitialize);
             GeneralHooks.ReloadEvent += OnReload;
         }
         protected override void Dispose(bool disposing)
@@ -30,46 +30,48 @@ namespace AutoClear
             if (disposing)
             {
                 GeneralHooks.ReloadEvent -= OnReload;
-                Timer_.Elapsed -= OnUpdate;
-                Timer_.Stop();
+                timer.Elapsed -= OnUpdate;
+                timer.Stop();
             }
             base.Dispose(disposing);
         }
         #endregion
 
-        private static async void OnUpdate(object? sender, ElapsedEventArgs args)
+        private async void OnUpdate(object? sender, ElapsedEventArgs args)
         {
-            int radius = config.AutoClearRadius;
-            Timer_.Interval = config.AutoClearInterval;
-            if (config.AutoClearRadius > 45000)
+            timer.Interval = config.ClearInterval;
+            int radius = config.ClearRadius;
+            if (config.ClearRadius > 45000)
             {
-                TShock.Log.ConsoleError("The cleaning radius should not exceed 45000!");
-                return;
+                config.ClearRadius = 8500;
+                config.Write(SavePath);
+                config = Config.Read(SavePath);
+                radius = config.ClearRadius;
             }
-            if (config.AutoClearEnabled)
+            if (config.Enabled)
             {
                 int clearedItems = 0;
-                if (config.AutoClearMessage)
+                if (config.SendMessage)
                     TSPlayer.All.SendInfoMessage("[i:4460][c/DFBF9F: Clearing the map in][c/FF3867: 10][c/DFBF9F: seconds...]");
                 await Task.Delay(10000);
-                for (int items = 0; items < Main.maxItems; items++)
+                for (int i = 0; i < Main.maxItems; i++)
                 {
-                    float dX = Main.item[items].position.X - TSPlayer.Server.X;
-                    float dY = Main.item[items].position.Y - TSPlayer.Server.Y;
-                    if (Main.item[items].active && dX * dX + dY * dY <= radius * radius * 256f)
+                    float dX = Main.item[i].position.X - TSPlayer.Server.X;
+                    float dY = Main.item[i].position.Y - TSPlayer.Server.Y;
+                    if (Main.item[i].active && dX * dX + dY * dY <= radius * radius * 256f)
                     {
-                        Main.item[items].active = false;
-                        TSPlayer.All.SendData(PacketTypes.ItemDrop, null, items);
+                        Main.item[i].active = false;
+                        TSPlayer.All.SendData(PacketTypes.UpdateItemDrop, null, i);
                         clearedItems++;
                     }
                 }
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("[AutoClear Debug]: Cleared items: {0} In radius: {1}", clearedItems, radius);
+                Console.WriteLine("[AutoClear info]: Cleared i: {0} In radius: {1}", clearedItems, radius);
                 Console.ResetColor();
-                if (config.AutoClearMessage)
-                    TSPlayer.All.SendInfoMessage("[i:4460][c/DFBF9F: Deleted items:] [c/FF3867:{0}] [c/DFBF9F:Within a radius of:] [c/FF3867:{1}] [c/DFBF9F:blocks]", clearedItems, radius);
+                if (config.SendMessage)
+                    TSPlayer.All.SendInfoMessage("[i:4460][c/DFBF9F: Deleted i:] [c/FF3867:{0}] [c/DFBF9F:Within a radius of:] [c/FF3867:{1}] [c/DFBF9F:blocks]", clearedItems, radius);
             }
-            if (config.AutoClearEnableProjectiles)
+            if (config.EnabledProjClear)
             {
                 int clearedProjectiles = 0;
                 for (int projectiles = 0; projectiles < Main.maxItems; projectiles++)
@@ -84,41 +86,30 @@ namespace AutoClear
                     }
                 }
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("[AutoClear Debug]: Cleared Projectiles: {0} In radius: {1}", clearedProjectiles, radius);
+                Console.WriteLine("[AutoClear Info]: Cleared Projectiles: {0} In radius: {1}", clearedProjectiles, radius);
                 Console.ResetColor();
-                if (config.AutoClearMessage)
+                if (config.SendMessage)
                     TSPlayer.All.SendInfoMessage("[i:4460][c/DFBF9F: Deleted projectiles:] [c/FF3867:{0}]", clearedProjectiles);
             }
         }
-        private static void OnInitialize(EventArgs args)
+        private void OnPostInitialize(EventArgs args)
         {
-            ReadConfig();
+            timer.Elapsed += OnUpdate;
+            timer.Start();
         }
-        private static void OnPostInitialize(EventArgs args)
-        {
-            Timer_.Elapsed += OnUpdate;
-            Timer_.Start();
-        }
-        public static void OnReload(ReloadEventArgs args)
-        {
-            ReadConfig();
-            args.Player.SendSuccessMessage("[AutoClear] Succesfully reloaded config.");
-            Timer_.Interval = 100;
-        }
-        public static void ReadConfig()
+        public void OnReload(ReloadEventArgs args)
         {
             try
             {
-                string path = Path.Combine(TShock.SavePath, "AutoClear.json");
-                config = Config.Read(path);
-                if (!File.Exists(path))
-                {
-                    config.Write(path);
-                }
+                config = Config.Read(SavePath);
+                args.Player.SendSuccessMessage("[AutoClear] Successfully reloaded config.");
+                timer.Interval = 100;
             }
-            catch
+            catch (Exception ex)
             {
-                Console.WriteLine("[AutoClear]: Failed load config!");
+                config.Write(SavePath);
+                config = Config.Read(SavePath);
+                args.Player.SendErrorMessage(ex.Message);
             }
         }
     }
